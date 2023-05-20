@@ -1,0 +1,15 @@
+[package]
+name = "audio-midi-shell"
+version = "0.1.0"
+edition = "2021"
+authors = ["Oliver Rockstedt <info@sourcebox.de>"]
+description = "Prototyping shell for audio development."
+repository = "https://github.com/sourcebox/audio-midi-shell-rs"
+license = "MIT"
+keywords = ["audio", "midi", "dsp"]
+categories = ["multimedia::audio"]
+
+[dependencies]
+log = "0.4"
+midir = "0.9"
+tinyaudio = "0.1.1"
