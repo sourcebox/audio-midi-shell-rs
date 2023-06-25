@@ -35,6 +35,14 @@ impl AudioGenerator for TestGenerator {
 
 ```
 
+## Example
+
+The `examples` directory contains a simple monophonic synthesizer playing a sine wave for each received note.
+
+```shell
+    cargo run --example sine_synth
+```
+
 ## License
 
 Published under the MIT license. Any contribution to this project must be provided under the same license conditions.
