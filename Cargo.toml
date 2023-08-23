@@ -12,4 +12,4 @@ categories = ["multimedia::audio"]
 [dependencies]
 log = "0.4"
 midir = "0.9"
-tinyaudio = "0.1.1"
+tinyaudio = "0.1.2"
