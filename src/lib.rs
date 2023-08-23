@@ -4,23 +4,30 @@
 use std::sync::mpsc;
 
 use midir::{MidiInput, MidiInputConnection};
-use tinyaudio::{run_output_device, OutputDeviceParameters};
+use tinyaudio::{run_output_device, BaseAudioOutputDevice, OutputDeviceParameters};
 
 /// Shell running the audio and MIDI processing.
-pub struct AudioMidiShell;
+pub struct AudioMidiShell {
+    /// MIDI connections.
+    pub midi_connections: MidiConnections,
+
+    /// Output device:
+    pub output_device: Box<dyn BaseAudioOutputDevice>,
+}
 
 impl AudioMidiShell {
-    /// Initializes the output device and runs the generator in an infinite loop.
+    /// Initializes the MIDI inputs, the output device and runs the generator in a callback.
+    /// It returns a shell object that must be kept alive.
     /// - `sample_rate` is the sampling frequency in Hz.
     /// - `block_size` is the number of samples for the `process` function.
-    pub fn run_forever(
+    pub fn spawn(
         sample_rate: u32,
         block_size: usize,
         mut generator: impl AudioGenerator + Send + 'static,
-    ) -> ! {
+    ) -> Self {
         let (midi_sender, midi_receiver): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) =
             mpsc::channel();
-        let _midi_connections = init_midi(midi_sender);
+        let midi_connections = init_midi(midi_sender);
 
         generator.init(block_size);
 
@@ -30,7 +37,7 @@ impl AudioMidiShell {
             channel_sample_count: block_size,
         };
 
-        let _device = run_output_device(params, move |data| {
+        let output_device = run_output_device(params, move |data| {
             while let Ok(message) = midi_receiver.try_recv() {
                 generator.process_midi(message);
             }
@@ -45,6 +52,22 @@ impl AudioMidiShell {
             }
         })
         .unwrap();
+
+        Self {
+            midi_connections,
+            output_device,
+        }
+    }
+
+    /// Spawns the shell and keeps it alive forever.
+    /// - `sample_rate` is the sampling frequency in Hz.
+    /// - `block_size` is the number of samples for the `process` function.
+    pub fn run_forever(
+        sample_rate: u32,
+        block_size: usize,
+        generator: impl AudioGenerator + Send + 'static,
+    ) -> ! {
+        let _shell = Self::spawn(sample_rate, block_size, generator);
 
         loop {
             std::thread::sleep(std::time::Duration::from_millis(100));
