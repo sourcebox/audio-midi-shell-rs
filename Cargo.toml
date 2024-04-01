@@ -10,6 +10,6 @@ keywords = ["audio", "midi", "dsp"]
 categories = ["multimedia::audio"]
 
 [dependencies]
-log = "0.4"
-midir = "0.9"
-tinyaudio = "0.1.2"
+log = "0.4.21"
+midir = "0.9.1"
+tinyaudio = "0.1.3"
