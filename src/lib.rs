@@ -4,7 +4,7 @@
 use std::sync::mpsc;
 
 use midir::{MidiInput, MidiInputConnection};
-use tinyaudio::{run_output_device, BaseAudioOutputDevice, OutputDeviceParameters};
+use tinyaudio::{run_output_device, OutputDevice, OutputDeviceParameters};
 
 /// Shell running the audio and MIDI processing.
 pub struct AudioMidiShell {
@@ -12,7 +12,7 @@ pub struct AudioMidiShell {
     pub midi_connections: MidiConnections,
 
     /// Output device:
-    pub output_device: Box<dyn BaseAudioOutputDevice>,
+    pub output_device: OutputDevice,
 }
 
 impl AudioMidiShell {
