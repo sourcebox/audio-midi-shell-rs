@@ -11,5 +11,11 @@ categories = ["multimedia::audio"]
 
 [dependencies]
 log = "0.4.21"
-midir = "0.9.1"
 tinyaudio = "0.2.0"
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+midir = "0.10.0"
+
+# Ensure compatibility with legacy macOS versions.
+[target.'cfg(target_os = "macos")'.dependencies]
+midir = "0.9.1"
