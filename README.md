@@ -10,7 +10,7 @@ It opens the default output device with a given sample rate and process block si
 use audio_midi_shell::{AudioMidiShell, AudioGenerator};
 
 const SAMPLE_RATE: u32 = 44100;
-const BLOCK_SIZE: usize = 256;
+const BLOCK_SIZE: usize = 1024;
 
 fn main() -> ! {
     AudioMidiShell::run_forever(SAMPLE_RATE, BLOCK_SIZE, TestGenerator);
