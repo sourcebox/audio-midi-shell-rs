@@ -6,7 +6,7 @@ It opens the default output device with a given sample rate and process block si
 
 ## Usage
 
-```rust
+```rust no_run
 use audio_midi_shell::{AudioMidiShell, AudioGenerator};
 
 const SAMPLE_RATE: u32 = 44100;
