@@ -29,10 +29,17 @@ impl AudioMidiShell {
         generator.init(block_size);
 
         let device = default_output_device();
+
+        #[cfg(target_os = "macos")]
+        let channels = 0b11;
+
+        #[cfg(not(target_os = "macos"))]
+        let channels = 2;
+
         let stream_config = StreamConfig {
             samplerate: sample_rate as f64,
-            channels: 0b11,
-            buffer_size_range: (None, None),
+            channels,
+            buffer_size_range: (Some(16), Some(2048)),
             exclusive: false,
         };
         let output_stream = device
