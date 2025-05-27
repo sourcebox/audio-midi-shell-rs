@@ -1,33 +1,18 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
-use std::marker::PhantomData;
 use std::sync::mpsc;
 
 use interflow::prelude::*;
 use midir::{MidiInput, MidiInputConnection};
 
 /// Shell running the audio and MIDI processing.
-pub struct AudioMidiShell<S, C>
-where
-    S: AudioStreamHandle<C>,
-    C: AudioOutputCallback,
-{
+pub struct AudioMidiShell {
     /// MIDI connections.
     pub midi_connections: MidiConnections,
-
-    /// Output stream handle.
-    output_stream: S,
-
-    /// Dummy for callback generic.
-    _callback: PhantomData<C>,
 }
 
-impl<S, C> AudioMidiShell<S, C>
-where
-    S: AudioStreamHandle<C>,
-    C: AudioOutputCallback,
-{
+impl AudioMidiShell {
     /// Initializes the MIDI inputs, the output device and runs the generator in a callback.
     /// It returns a shell object that must be kept alive.
     /// - `sample_rate` is the sampling frequency in Hz.
@@ -57,11 +42,10 @@ where
             )
             .unwrap();
 
-        Self {
-            midi_connections,
-            output_stream,
-            _callback: PhantomData,
-        }
+        // TODO: store stream correctly when `interflow` API allows it.
+        std::mem::forget(output_stream);
+
+        Self { midi_connections }
     }
 
     /// Spawns the shell and keeps it alive forever.
@@ -139,7 +123,6 @@ struct OutputCallback<G: AudioGenerator> {
 
 impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
     fn on_output_data(&mut self, _context: AudioCallbackContext, mut output: AudioOutput<f32>) {
-        dbg!(&output.buffer);
         while let Ok(message) = self.midi_receiver.try_recv() {
             self.generator.process_midi(message);
         }
