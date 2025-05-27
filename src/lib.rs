@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
-use std::sync::mpsc;
+use std::{collections::VecDeque, sync::mpsc};
 
 use interflow::prelude::*;
 use midir::{MidiInput, MidiInputConnection};
@@ -120,8 +120,8 @@ struct OutputCallback<G: AudioGenerator> {
     /// Requested block size.
     block_size: usize,
 
-    /// Leftover samples from the last rendering pass.
-    leftover_samples: Vec<(f32, f32)>,
+    /// Samples to output.
+    out_samples: VecDeque<(f32, f32)>,
 }
 
 impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
@@ -130,38 +130,20 @@ impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
             self.generator.process_midi(message);
         }
 
-        let mut buffer_offset = 0;
-
-        if !self.leftover_samples.is_empty() {
-            // Put any samples renaining from the last run into the buffer.
-            for (i, frame) in self.leftover_samples.iter().enumerate() {
-                output.buffer.set_frame(i, &[frame.0]);
-            }
-            buffer_offset += self.leftover_samples.len();
-            self.leftover_samples.clear();
-        }
-
-        loop {
-            let mut samples_left = vec![0.0; self.block_size];
-            let mut samples_right = vec![0.0; self.block_size];
-            self.generator
-                .process(&mut samples_left, &mut samples_right);
-
-            for i in 0..self.block_size {
-                if buffer_offset + i < output.buffer.num_samples() {
-                    output
-                        .buffer
-                        .set_frame(i + buffer_offset, &[samples_left[i]]);
-                } else {
-                    self.leftover_samples
-                        .push((samples_left[i], samples_right[i]));
+        for out in output.buffer.as_interleaved_mut() {
+            if self.out_samples.is_empty() {
+                let mut samples_left = vec![0.0; self.block_size];
+                let mut samples_right = vec![0.0; self.block_size];
+                self.generator
+                    .process(&mut samples_left, &mut samples_right);
+                for i in 0..self.block_size {
+                    self.out_samples
+                        .push_back((samples_left[i], samples_right[i]));
                 }
             }
 
-            buffer_offset += self.block_size;
-
-            if buffer_offset >= output.buffer.num_samples() {
-                break;
+            if let Some(s) = self.out_samples.pop_front() {
+                *out = s.0;
             }
         }
     }
@@ -174,7 +156,7 @@ impl<G: AudioGenerator> OutputCallback<G> {
             generator,
             midi_receiver,
             block_size,
-            leftover_samples: Vec::with_capacity(block_size),
+            out_samples: VecDeque::with_capacity(block_size),
         }
     }
 }
