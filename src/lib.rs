@@ -31,8 +31,8 @@ impl AudioMidiShell {
         let device = default_output_device();
         let stream_config = StreamConfig {
             samplerate: sample_rate as f64,
-            channels: 2,
-            buffer_size_range: (Some(block_size), Some(block_size)),
+            channels: 1,
+            buffer_size_range: (None, None),
             exclusive: false,
         };
         let output_stream = device
@@ -119,6 +119,9 @@ struct OutputCallback<G: AudioGenerator> {
 
     /// Requested block size.
     block_size: usize,
+
+    /// Leftover samples from the last rendering pass.
+    leftover_samples: Vec<(f32, f32)>,
 }
 
 impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
@@ -127,15 +130,39 @@ impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
             self.generator.process_midi(message);
         }
 
-        let mut samples_left = vec![0.0; self.block_size];
-        let mut samples_right = vec![0.0; self.block_size];
-        self.generator
-            .process(&mut samples_left, &mut samples_right);
+        let mut buffer_offset = 0;
 
-        for i in 0..output.buffer.num_samples() {
-            output
-                .buffer
-                .set_frame(i, &[samples_left[i], samples_right[i]]);
+        if !self.leftover_samples.is_empty() {
+            // Put any samples renaining from the last run into the buffer.
+            for (i, frame) in self.leftover_samples.iter().enumerate() {
+                output.buffer.set_frame(i, &[frame.0]);
+            }
+            buffer_offset += self.leftover_samples.len();
+            self.leftover_samples.clear();
+        }
+
+        loop {
+            let mut samples_left = vec![0.0; self.block_size];
+            let mut samples_right = vec![0.0; self.block_size];
+            self.generator
+                .process(&mut samples_left, &mut samples_right);
+
+            for i in 0..self.block_size {
+                if buffer_offset + i < output.buffer.num_samples() {
+                    output
+                        .buffer
+                        .set_frame(i + buffer_offset, &[samples_left[i]]);
+                } else {
+                    self.leftover_samples
+                        .push((samples_left[i], samples_right[i]));
+                }
+            }
+
+            buffer_offset += self.block_size;
+
+            if buffer_offset >= output.buffer.num_samples() {
+                break;
+            }
         }
     }
 }
@@ -147,6 +174,7 @@ impl<G: AudioGenerator> OutputCallback<G> {
             generator,
             midi_receiver,
             block_size,
+            leftover_samples: Vec::with_capacity(block_size),
         }
     }
 }
