@@ -31,7 +31,7 @@ impl AudioMidiShell {
         let device = default_output_device();
         let stream_config = StreamConfig {
             samplerate: sample_rate as f64,
-            channels: 1,
+            channels: 0b11,
             buffer_size_range: (None, None),
             exclusive: false,
         };
@@ -130,7 +130,7 @@ impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
             self.generator.process_midi(message);
         }
 
-        for out in output.buffer.as_interleaved_mut() {
+        for i in 0..output.buffer.num_samples() {
             if self.out_samples.is_empty() {
                 let mut samples_left = vec![0.0; self.block_size];
                 let mut samples_right = vec![0.0; self.block_size];
@@ -143,7 +143,7 @@ impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
             }
 
             if let Some(s) = self.out_samples.pop_front() {
-                *out = s.0;
+                output.buffer.set_frame(i, &[s.0, s.1]);
             }
         }
     }
