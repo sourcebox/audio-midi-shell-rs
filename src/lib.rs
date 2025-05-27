@@ -1,21 +1,33 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
+use std::marker::PhantomData;
 use std::sync::mpsc;
 
+use interflow::prelude::*;
 use midir::{MidiInput, MidiInputConnection};
-use tinyaudio::{run_output_device, OutputDevice, OutputDeviceParameters};
 
 /// Shell running the audio and MIDI processing.
-pub struct AudioMidiShell {
+pub struct AudioMidiShell<S, C>
+where
+    S: AudioStreamHandle<C>,
+    C: AudioOutputCallback,
+{
     /// MIDI connections.
     pub midi_connections: MidiConnections,
 
-    /// Output device:
-    pub output_device: OutputDevice,
+    /// Output stream handle.
+    output_stream: S,
+
+    /// Dummy for callback generic.
+    _callback: PhantomData<C>,
 }
 
-impl AudioMidiShell {
+impl<S, C> AudioMidiShell<S, C>
+where
+    S: AudioStreamHandle<C>,
+    C: AudioOutputCallback,
+{
     /// Initializes the MIDI inputs, the output device and runs the generator in a callback.
     /// It returns a shell object that must be kept alive.
     /// - `sample_rate` is the sampling frequency in Hz.
@@ -31,31 +43,24 @@ impl AudioMidiShell {
 
         generator.init(block_size);
 
-        let params = OutputDeviceParameters {
-            channels_count: 2,
-            sample_rate: sample_rate as usize,
-            channel_sample_count: block_size,
+        let device = default_output_device();
+        let stream_config = StreamConfig {
+            samplerate: sample_rate as f64,
+            channels: 2,
+            buffer_size_range: (Some(block_size), Some(block_size)),
+            exclusive: false,
         };
-
-        let output_device = run_output_device(params, move |data| {
-            while let Ok(message) = midi_receiver.try_recv() {
-                generator.process_midi(message);
-            }
-
-            let mut samples_left = vec![0.0; block_size];
-            let mut samples_right = vec![0.0; block_size];
-            generator.process(&mut samples_left, &mut samples_right);
-
-            for (frame_no, samples) in data.chunks_mut(params.channels_count).enumerate() {
-                samples[0] = samples_left[frame_no];
-                samples[1] = samples_right[frame_no];
-            }
-        })
-        .unwrap();
+        let output_stream = device
+            .create_output_stream(
+                stream_config,
+                OutputCallback::new(generator, midi_receiver, block_size),
+            )
+            .unwrap();
 
         Self {
             midi_connections,
-            output_device,
+            output_stream,
+            _callback: PhantomData,
         }
     }
 
@@ -118,4 +123,47 @@ fn init_midi(sender: mpsc::Sender<Vec<u8>>) -> MidiConnections {
     }
 
     connections
+}
+
+/// Callback for the output stream.
+struct OutputCallback<G: AudioGenerator> {
+    /// Generator.
+    generator: G,
+
+    /// Receiver for MIDI messages.
+    midi_receiver: mpsc::Receiver<Vec<u8>>,
+
+    /// Requested block size.
+    block_size: usize,
+}
+
+impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
+    fn on_output_data(&mut self, _context: AudioCallbackContext, mut output: AudioOutput<f32>) {
+        dbg!(&output.buffer);
+        while let Ok(message) = self.midi_receiver.try_recv() {
+            self.generator.process_midi(message);
+        }
+
+        let mut samples_left = vec![0.0; self.block_size];
+        let mut samples_right = vec![0.0; self.block_size];
+        self.generator
+            .process(&mut samples_left, &mut samples_right);
+
+        for i in 0..output.buffer.num_samples() {
+            output
+                .buffer
+                .set_frame(i, &[samples_left[i], samples_right[i]]);
+        }
+    }
+}
+
+impl<G: AudioGenerator> OutputCallback<G> {
+    /// Returns a new callback.
+    pub fn new(generator: G, midi_receiver: mpsc::Receiver<Vec<u8>>, block_size: usize) -> Self {
+        Self {
+            generator,
+            midi_receiver,
+            block_size,
+        }
+    }
 }

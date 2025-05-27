@@ -10,8 +10,8 @@ keywords = ["audio", "midi", "dsp"]
 categories = ["multimedia::audio"]
 
 [dependencies]
+interflow = { git = "https://github.com/SolarLiner/interflow", rev = "b86d94adf5fb344ccd2734c23e75c2e07cfa5cdb" }
 log = "0.4.22"
-tinyaudio = "1.0.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 midir = "0.10.0"

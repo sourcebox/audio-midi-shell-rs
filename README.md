@@ -1,6 +1,6 @@
 # audio-midi-shell
 
-Cross-platform wrapper around [tinyaudio](https://crates.io/crates/tinyaudio) and [midir](https://crates.io/crates/midir) for prototyping audio algorithms as standalone applications.
+Cross-platform wrapper around [interflow](https://github.com/SolarLiner/interflow/) and [midir](https://crates.io/crates/midir) for prototyping audio algorithms as standalone applications.
 
 It opens the default output device with a given sample rate and process block size as well as all MIDI input ports found.
 
