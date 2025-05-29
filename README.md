@@ -2,7 +2,7 @@
 
 Cross-platform wrapper around [interflow](https://github.com/SolarLiner/interflow/) and [midir](https://crates.io/crates/midir) for prototyping audio algorithms as standalone applications.
 
-It opens the default output device with a given sample rate and process block size as well as all MIDI input ports found.
+It opens the default output device with a given sample rate and process chunk size as well as all MIDI input ports found.
 
 ## Usage
 
@@ -10,21 +10,22 @@ It opens the default output device with a given sample rate and process block si
 use audio_midi_shell::{AudioMidiShell, AudioGenerator};
 
 const SAMPLE_RATE: u32 = 44100;
-const BLOCK_SIZE: usize = 1024;
+const BUFFER_SIZE: usize = 1024;
+const CHUNK_SIZE: usize = 16;
 
 fn main() -> ! {
-    AudioMidiShell::run_forever(SAMPLE_RATE, BLOCK_SIZE, TestGenerator);
+    AudioMidiShell::run_forever(SAMPLE_RATE, BUFFER_SIZE, CHUNK_SIZE, TestGenerator);
 }
 
 struct TestGenerator;
 
 impl AudioGenerator for TestGenerator {
-    fn init(&mut self, block_size: usize) {
+    fn init(&mut self, chunk_size: usize) {
         // Optional function, called once on startup for initialization tasks.
     }
 
     fn process(&mut self, samples_left: &mut [f32], samples_right: &mut [f32]) {
-        // Called periodically with buffers of `BLOCK_SIZE` samples.
+        // Called periodically with buffers of `CHUNK_SIZE` samples.
         // Fill `samples_left` and `samples_right` with audio data accordingly.
     }
 
