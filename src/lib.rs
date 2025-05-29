@@ -19,22 +19,25 @@ impl AudioMidiShell {
     /// Initializes the MIDI inputs, the output device and runs the generator in a callback.
     /// It returns a shell object that must be kept alive.
     /// - `sample_rate` is the sampling frequency in Hz.
-    /// - `block_size` is the number of samples for the `process` function.
+    /// - `buffer_size` is the number of samples used by the system buffer.
+    ///   This setting determines the latency.
+    /// - `chunk_size` is the number of samples passed to the `process` function.
     pub fn spawn(
         sample_rate: u32,
-        block_size: usize,
+        buffer_size: usize,
+        chunk_size: usize,
         mut generator: impl AudioGenerator + Send + 'static,
     ) -> Self {
         let (midi_sender, midi_receiver): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) =
             mpsc::channel();
         let midi_connections = init_midi(midi_sender);
 
-        generator.init(block_size);
+        generator.init(chunk_size);
 
         let params = OutputDeviceParameters {
             channels_count: 2,
             sample_rate: sample_rate as usize,
-            channel_sample_count: block_size,
+            channel_sample_count: buffer_size,
         };
 
         let output_device = run_output_device(params, move |data| {
@@ -42,8 +45,8 @@ impl AudioMidiShell {
                 generator.process_midi(message);
             }
 
-            let mut samples_left = vec![0.0; block_size];
-            let mut samples_right = vec![0.0; block_size];
+            let mut samples_left = vec![0.0; buffer_size];
+            let mut samples_right = vec![0.0; buffer_size];
             generator.process(&mut samples_left, &mut samples_right);
 
             for (frame_no, samples) in data.chunks_mut(params.channels_count).enumerate() {
@@ -61,13 +64,16 @@ impl AudioMidiShell {
 
     /// Spawns the shell and keeps it alive forever.
     /// - `sample_rate` is the sampling frequency in Hz.
-    /// - `block_size` is the number of samples for the `process` function.
+    /// - `buffer_size` is the number of samples used by the system buffer.
+    ///   This setting determines the latency.
+    /// - `chunk_size` is the number of samples passed to the `process` function.
     pub fn run_forever(
         sample_rate: u32,
-        block_size: usize,
+        buffer_size: usize,
+        chunk_size: usize,
         generator: impl AudioGenerator + Send + 'static,
     ) -> ! {
-        let _shell = Self::spawn(sample_rate, block_size, generator);
+        let _shell = Self::spawn(sample_rate, buffer_size, chunk_size, generator);
 
         loop {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -78,10 +84,10 @@ impl AudioMidiShell {
 /// Trait to be implemented by structs that are passed as generator to the shell.
 pub trait AudioGenerator {
     /// Initializes the generator. Called once inside the shell `run` function.
-    fn init(&mut self, _block_size: usize) {}
+    fn init(&mut self, _chunk_size: usize) {}
 
-    /// Generates a block of samples.
-    /// `samples_left` and `samples_right` are buffers of the block size passed to the shell `run`
+    /// Generates a chunk of samples.
+    /// `samples_left` and `samples_right` are buffers of `chunk size` passed to the shell `run`
     /// function. They are initialized to `0.0` and must be filled with sample data.
     fn process(&mut self, samples_left: &mut [f32], samples_right: &mut [f32]);
 

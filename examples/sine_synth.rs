@@ -3,10 +3,11 @@
 use audio_midi_shell::{AudioGenerator, AudioMidiShell};
 
 const SAMPLE_RATE: u32 = 44100;
-const BLOCK_SIZE: usize = 1024;
+const BUFFER_SIZE: usize = 1024;
+const CHUNK_SIZE: usize = 16;
 
 fn main() -> ! {
-    AudioMidiShell::run_forever(SAMPLE_RATE, BLOCK_SIZE, SineSynth::default());
+    AudioMidiShell::run_forever(SAMPLE_RATE, BUFFER_SIZE, CHUNK_SIZE, SineSynth::default());
 }
 
 #[derive(Debug, Default)]
