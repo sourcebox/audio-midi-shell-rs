@@ -139,12 +139,12 @@ struct OutputCallback<G: AudioGenerator> {
 
 impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
     fn on_output_data(&mut self, _context: AudioCallbackContext, mut output: AudioOutput<f32>) {
-        while let Ok(message) = self.midi_receiver.try_recv() {
-            self.generator.process_midi(message);
-        }
-
         for i in 0..output.buffer.num_samples() {
             if self.out_samples.is_empty() {
+                while let Ok(message) = self.midi_receiver.try_recv() {
+                    self.generator.process_midi(message);
+                }
+
                 let mut samples_left = vec![0.0; self.chunk_size];
                 let mut samples_right = vec![0.0; self.chunk_size];
                 self.generator
