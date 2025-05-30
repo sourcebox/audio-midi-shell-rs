@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
-use std::sync::mpsc;
+use std::{collections::VecDeque, sync::mpsc};
 
 use midir::{MidiInput, MidiInputConnection};
 use tinyaudio::{run_output_device, OutputDevice, OutputDeviceParameters};
@@ -40,18 +40,27 @@ impl AudioMidiShell {
             channel_sample_count: buffer_size,
         };
 
+        let mut out_samples = VecDeque::with_capacity(chunk_size);
+
         let output_device = run_output_device(params, move |data| {
-            while let Ok(message) = midi_receiver.try_recv() {
-                generator.process_midi(message);
-            }
+            for samples in data.chunks_mut(params.channels_count) {
+                if out_samples.is_empty() {
+                    while let Ok(message) = midi_receiver.try_recv() {
+                        generator.process_midi(message);
+                    }
 
-            let mut samples_left = vec![0.0; buffer_size];
-            let mut samples_right = vec![0.0; buffer_size];
-            generator.process(&mut samples_left, &mut samples_right);
+                    let mut samples_left = vec![0.0; chunk_size];
+                    let mut samples_right = vec![0.0; chunk_size];
+                    generator.process(&mut samples_left, &mut samples_right);
 
-            for (frame_no, samples) in data.chunks_mut(params.channels_count).enumerate() {
-                samples[0] = samples_left[frame_no];
-                samples[1] = samples_right[frame_no];
+                    for i in 0..chunk_size {
+                        out_samples.push_back((samples_left[i], samples_right[i]));
+                    }
+                }
+                if let Some(s) = out_samples.pop_front() {
+                    samples[0] = s.0;
+                    samples[1] = s.1;
+                }
             }
         })
         .unwrap();

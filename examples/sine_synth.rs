@@ -18,7 +18,7 @@ struct SineSynth {
 }
 
 impl AudioGenerator for SineSynth {
-    fn init(&mut self, _block_size: usize) {}
+    fn init(&mut self, _chunk_size: usize) {}
 
     fn process(&mut self, samples_left: &mut [f32], samples_right: &mut [f32]) {
         for (sample_left, sample_right) in samples_left.iter_mut().zip(samples_right.iter_mut()) {
