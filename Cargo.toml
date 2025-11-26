@@ -10,7 +10,7 @@ keywords = ["audio", "midi", "dsp"]
 categories = ["multimedia::audio"]
 
 [dependencies]
-log = "0.4.22"
+log = "0.4.28"
 tinyaudio = "2.0.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
