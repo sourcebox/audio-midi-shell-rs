@@ -14,7 +14,7 @@ log = "0.4.22"
 tinyaudio = "2.0.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-midir = "0.10.0"
+midir = "0.10.3"
 
 # Ensure compatibility with legacy macOS versions.
 [target.'cfg(target_os = "macos")'.dependencies]
