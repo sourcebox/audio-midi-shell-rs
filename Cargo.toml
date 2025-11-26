@@ -11,7 +11,7 @@ categories = ["multimedia::audio"]
 
 [dependencies]
 log = "0.4.22"
-tinyaudio = "1.0.0"
+tinyaudio = "2.0.0"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 midir = "0.10.0"
