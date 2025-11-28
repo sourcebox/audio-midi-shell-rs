@@ -28,10 +28,7 @@ impl AudioMidiShell {
         chunk_size: usize,
         mut generator: impl AudioGenerator + Send + 'static,
     ) -> Self {
-        let (midi_sender, midi_receiver): (
-            mpsc::Sender<(u64, Vec<u8>)>,
-            mpsc::Receiver<(u64, Vec<u8>)>,
-        ) = mpsc::channel();
+        let (midi_sender, midi_receiver) = mpsc::channel();
         let midi_connections = init_midi(midi_sender);
 
         generator.init(chunk_size);
