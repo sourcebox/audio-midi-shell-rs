@@ -29,7 +29,7 @@ impl AudioGenerator for TestGenerator {
         // Fill `samples_left` and `samples_right` with audio data accordingly.
     }
 
-    fn process_midi(&mut self, message: Vec<u8>) {
+    fn process_midi(&mut self, message: Vec<u8>, timestamp: u64) {
         // Optional function, called on each incoming MIDI message.
     }
 }

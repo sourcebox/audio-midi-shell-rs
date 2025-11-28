@@ -34,7 +34,7 @@ impl AudioGenerator for SineSynth {
         }
     }
 
-    fn process_midi(&mut self, message: Vec<u8>) {
+    fn process_midi(&mut self, message: Vec<u8>, _timestamp: u64) {
         match message[0] & 0xF0 {
             0x80 => {
                 // Note off

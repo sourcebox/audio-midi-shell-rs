@@ -28,8 +28,10 @@ impl AudioMidiShell {
         chunk_size: usize,
         mut generator: impl AudioGenerator + Send + 'static,
     ) -> Self {
-        let (midi_sender, midi_receiver): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) =
-            mpsc::channel();
+        let (midi_sender, midi_receiver): (
+            mpsc::Sender<(u64, Vec<u8>)>,
+            mpsc::Receiver<(u64, Vec<u8>)>,
+        ) = mpsc::channel();
         let midi_connections = init_midi(midi_sender);
 
         generator.init(chunk_size);
@@ -46,7 +48,7 @@ impl AudioMidiShell {
             for samples in data.chunks_mut(params.channels_count) {
                 if out_samples.is_empty() {
                     while let Ok(message) = midi_receiver.try_recv() {
-                        generator.process_midi(message);
+                        generator.process_midi(message.1, message.0);
                     }
 
                     let mut samples_left = vec![0.0; chunk_size];
@@ -101,14 +103,14 @@ pub trait AudioGenerator {
     fn process(&mut self, samples_left: &mut [f32], samples_right: &mut [f32]);
 
     /// Processes a MIDI message.
-    fn process_midi(&mut self, _message: Vec<u8>) {}
+    fn process_midi(&mut self, _message: Vec<u8>, _timestamp: u64) {}
 }
 
 /// Vector of MIDI connections with an attached mpsc sender.
-type MidiConnections = Vec<MidiInputConnection<mpsc::Sender<Vec<u8>>>>;
+type MidiConnections = Vec<MidiInputConnection<mpsc::Sender<(u64, Vec<u8>)>>>;
 
 /// Connects all available MIDI inputs to an mpsc sender and returns them in a vector.
-fn init_midi(sender: mpsc::Sender<Vec<u8>>) -> MidiConnections {
+fn init_midi(sender: mpsc::Sender<(u64, Vec<u8>)>) -> MidiConnections {
     let mut connections = MidiConnections::new();
 
     let input = MidiInput::new(&(env!("CARGO_PKG_NAME").to_owned() + " scan input"))
@@ -123,8 +125,8 @@ fn init_midi(sender: mpsc::Sender<Vec<u8>>) -> MidiConnections {
             .connect(
                 port,
                 port_name.as_str(),
-                |_timestamp, message, sender| {
-                    sender.send(Vec::from(message)).ok();
+                |timestamp, message, sender| {
+                    sender.send((timestamp, Vec::from(message))).ok();
                 },
                 sender.clone(),
             )
