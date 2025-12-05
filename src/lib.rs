@@ -4,7 +4,7 @@
 use std::{collections::VecDeque, sync::mpsc};
 
 use midir::{MidiInput, MidiInputConnection};
-use tinyaudio::{run_output_device, OutputDevice, OutputDeviceParameters};
+use tinyaudio::{OutputDevice, OutputDeviceParameters, run_output_device};
 
 /// Shell running the audio and MIDI processing.
 pub struct AudioMidiShell {
