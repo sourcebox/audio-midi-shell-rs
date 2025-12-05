@@ -4,10 +4,15 @@ use audio_midi_shell::{AudioGenerator, AudioMidiShell};
 
 const SAMPLE_RATE: u32 = 44100;
 const BUFFER_SIZE: usize = 1024;
-const CHUNK_SIZE: usize = 16;
+const PROCESS_CHUNK_SIZE: usize = 16;
 
 fn main() -> ! {
-    AudioMidiShell::run_forever(SAMPLE_RATE, BUFFER_SIZE, CHUNK_SIZE, SineSynth::default());
+    AudioMidiShell::run_forever(
+        SAMPLE_RATE,
+        BUFFER_SIZE,
+        PROCESS_CHUNK_SIZE,
+        SineSynth::default(),
+    );
 }
 
 #[derive(Debug, Default)]
@@ -18,13 +23,11 @@ struct SineSynth {
 }
 
 impl AudioGenerator for SineSynth {
-    fn init(&mut self, _chunk_size: usize) {}
-
-    fn process(&mut self, samples_left: &mut [f32], samples_right: &mut [f32]) {
-        for (sample_left, sample_right) in samples_left.iter_mut().zip(samples_right.iter_mut()) {
+    fn process(&mut self, frames: &mut [[f32; 2]]) {
+        for frame in frames {
             let sample = f32::sin(self.phase) * self.level * 0.5;
-            *sample_left = sample;
-            *sample_right = sample;
+            frame[0] = sample;
+            frame[1] = sample;
 
             self.phase += self.phase_inc;
 
@@ -34,7 +37,7 @@ impl AudioGenerator for SineSynth {
         }
     }
 
-    fn process_midi(&mut self, message: Vec<u8>, _timestamp: u64) {
+    fn process_midi(&mut self, message: &[u8], _timestamp: u64) {
         match message[0] & 0xF0 {
             0x80 => {
                 // Note off
