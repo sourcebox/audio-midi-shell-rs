@@ -16,20 +16,19 @@ impl AudioMidiShell {
     /// Initializes the MIDI inputs, the output device and runs the generator in a callback.
     /// It returns a shell object that must be kept alive.
     /// - `sample_rate` is the sampling frequency in Hz.
-    /// - `buffer_size` is the number of samples used by the system buffer.
+    /// - `buffer_size` is the number of frames used by the system buffer.
     ///   This setting determines the latency.
-    /// - `chunk_size` is the number of samples passed to the `process` function.
+    /// - `process_chunk_size` is the number of frames passed to the `process` function.
     pub fn spawn(
         sample_rate: u32,
         buffer_size: usize,
-        chunk_size: usize,
+        process_chunk_size: usize,
         mut generator: impl AudioGenerator + Send + 'static,
     ) -> Self {
-        let (midi_sender, midi_receiver): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) =
-            mpsc::channel();
+        let (midi_sender, midi_receiver) = mpsc::channel();
         let midi_connections = init_midi(midi_sender);
 
-        generator.init(chunk_size);
+        generator.init(process_chunk_size);
 
         let device = default_output_device();
 
@@ -48,7 +47,7 @@ impl AudioMidiShell {
         let output_stream = device
             .create_output_stream(
                 stream_config,
-                OutputCallback::new(generator, midi_receiver, chunk_size),
+                OutputCallback::new(generator, midi_receiver, process_chunk_size),
             )
             .unwrap();
 
@@ -62,14 +61,14 @@ impl AudioMidiShell {
     /// - `sample_rate` is the sampling frequency in Hz.
     /// - `buffer_size` is the number of samples used by the system buffer.
     ///   This setting determines the latency.
-    /// - `chunk_size` is the number of samples passed to the `process` function.
+    /// - `process_chunk_size` is the number of samples passed to the `process` function.
     pub fn run_forever(
         sample_rate: u32,
         buffer_size: usize,
-        chunk_size: usize,
+        process_chunk_size: usize,
         generator: impl AudioGenerator + Send + 'static,
     ) -> ! {
-        let _shell = Self::spawn(sample_rate, buffer_size, chunk_size, generator);
+        let _shell = Self::spawn(sample_rate, buffer_size, process_chunk_size, generator);
 
         loop {
             std::thread::sleep(std::time::Duration::from_millis(100));
@@ -79,23 +78,25 @@ impl AudioMidiShell {
 
 /// Trait to be implemented by structs that are passed as generator to the shell.
 pub trait AudioGenerator {
-    /// Initializes the generator. Called once inside the shell `run` function.
-    fn init(&mut self, _chunk_size: usize) {}
+    /// Initializes the generator. Called once on invocation.
+    /// - `process_chunk_size` is the number of frames passed to the `process` function.
+    fn init(&mut self, _process_chunk_size: usize) {}
 
     /// Generates a chunk of samples.
-    /// `samples_left` and `samples_right` are buffers of `chunk size` passed to the shell `run`
-    /// function. They are initialized to `0.0` and must be filled with sample data.
-    fn process(&mut self, samples_left: &mut [f32], samples_right: &mut [f32]);
+    /// - `frames` is a buffer of `process_chunk_size` elements.
+    ///   It is initialized to `[0.0; 2]` and must be filled with sample data.
+    ///   Index `0` of each element is the left channel, index `1` the right channel.
+    fn process(&mut self, frames: &mut [[f32; 2]]);
 
     /// Processes a MIDI message.
-    fn process_midi(&mut self, _message: Vec<u8>) {}
+    fn process_midi(&mut self, _message: &[u8], _timestamp: u64) {}
 }
 
 /// Vector of MIDI connections with an attached mpsc sender.
-type MidiConnections = Vec<MidiInputConnection<mpsc::Sender<Vec<u8>>>>;
+type MidiConnections = Vec<MidiInputConnection<mpsc::Sender<(u64, Vec<u8>)>>>;
 
 /// Connects all available MIDI inputs to an mpsc sender and returns them in a vector.
-fn init_midi(sender: mpsc::Sender<Vec<u8>>) -> MidiConnections {
+fn init_midi(sender: mpsc::Sender<(u64, Vec<u8>)>) -> MidiConnections {
     let mut connections = MidiConnections::new();
 
     let input = MidiInput::new(&(env!("CARGO_PKG_NAME").to_owned() + " scan input"))
@@ -110,8 +111,8 @@ fn init_midi(sender: mpsc::Sender<Vec<u8>>) -> MidiConnections {
             .connect(
                 port,
                 port_name.as_str(),
-                |_timestamp, message, sender| {
-                    sender.send(Vec::from(message)).ok();
+                |timestamp, message, sender| {
+                    sender.send((timestamp, Vec::from(message))).ok();
                 },
                 sender.clone(),
             )
@@ -128,10 +129,10 @@ struct OutputCallback<G: AudioGenerator> {
     generator: G,
 
     /// Receiver for MIDI messages.
-    midi_receiver: mpsc::Receiver<Vec<u8>>,
+    midi_receiver: mpsc::Receiver<(u64, Vec<u8>)>,
 
     /// Number of samples passed to the `process` function.
-    chunk_size: usize,
+    process_chunk_size: usize,
 
     /// Samples to output.
     out_samples: VecDeque<(f32, f32)>,
@@ -142,16 +143,14 @@ impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
         for i in 0..output.buffer.num_samples() {
             if self.out_samples.is_empty() {
                 while let Ok(message) = self.midi_receiver.try_recv() {
-                    self.generator.process_midi(message);
+                    self.generator.process_midi(message.1.as_ref(), message.0);
                 }
 
-                let mut samples_left = vec![0.0; self.chunk_size];
-                let mut samples_right = vec![0.0; self.chunk_size];
-                self.generator
-                    .process(&mut samples_left, &mut samples_right);
-                for i in 0..self.chunk_size {
-                    self.out_samples
-                        .push_back((samples_left[i], samples_right[i]));
+                let mut frames = vec![[0.0; 2]; self.process_chunk_size];
+                self.generator.process(&mut frames);
+
+                for i in 0..self.process_chunk_size {
+                    self.out_samples.push_back((frames[i][0], frames[i][1]));
                 }
             }
 
@@ -164,11 +163,15 @@ impl<G: AudioGenerator> AudioOutputCallback for OutputCallback<G> {
 
 impl<G: AudioGenerator> OutputCallback<G> {
     /// Returns a new callback.
-    pub fn new(generator: G, midi_receiver: mpsc::Receiver<Vec<u8>>, chunk_size: usize) -> Self {
+    pub fn new(
+        generator: G,
+        midi_receiver: mpsc::Receiver<(u64, Vec<u8>)>,
+        chunk_size: usize,
+    ) -> Self {
         Self {
             generator,
             midi_receiver,
-            chunk_size,
+            process_chunk_size: chunk_size,
             out_samples: VecDeque::with_capacity(chunk_size),
         }
     }

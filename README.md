@@ -2,7 +2,9 @@
 
 Cross-platform wrapper around [interflow](https://github.com/SolarLiner/interflow/) and [midir](https://crates.io/crates/midir) for prototyping audio algorithms as standalone applications.
 
-It opens the default output device with a given sample rate and process chunk size as well as all MIDI input ports found.
+It opens the default audio output device with a given sample rate and buffer size.
+MIDI messages are received from all detected MIDI inputs ports.
+The process chunk size can be set independently from the buffer size.
 
 ## Usage
 
@@ -11,10 +13,10 @@ use audio_midi_shell::{AudioMidiShell, AudioGenerator};
 
 const SAMPLE_RATE: u32 = 44100;
 const BUFFER_SIZE: usize = 1024;
-const CHUNK_SIZE: usize = 16;
+const PROCESS_CHUNK_SIZE: usize = 16;
 
 fn main() -> ! {
-    AudioMidiShell::run_forever(SAMPLE_RATE, BUFFER_SIZE, CHUNK_SIZE, TestGenerator);
+    AudioMidiShell::run_forever(SAMPLE_RATE, BUFFER_SIZE, PROCESS_CHUNK_SIZE, TestGenerator);
 }
 
 struct TestGenerator;
@@ -24,12 +26,12 @@ impl AudioGenerator for TestGenerator {
         // Optional function, called once on startup for initialization tasks.
     }
 
-    fn process(&mut self, samples_left: &mut [f32], samples_right: &mut [f32]) {
-        // Called periodically with buffers of `CHUNK_SIZE` samples.
-        // Fill `samples_left` and `samples_right` with audio data accordingly.
+    fn process(&mut self, frames: &mut [[f32; 2]]) {
+        // Called periodically with a buffer of `PROCESS_CHUNK_SIZE` samples.
+        // Fill `frames` with sample data accordingly.
     }
 
-    fn process_midi(&mut self, message: Vec<u8>) {
+    fn process_midi(&mut self, message: &[u8], timestamp: u64) {
         // Optional function, called on each incoming MIDI message.
     }
 }
