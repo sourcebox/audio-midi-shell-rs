@@ -119,7 +119,6 @@ fn init_midi(sender: mpsc::Sender<(u64, Vec<u8>)>) -> MidiConnections {
         let input = MidiInput::new(&(env!("CARGO_PKG_NAME").to_owned() + " input"))
             .expect("MIDI Input error");
         let port_name = input.port_name(port).unwrap();
-        log::info!("Connecting to MIDI input {}", port_name);
         let conn = input
             .connect(
                 port,
@@ -130,7 +129,10 @@ fn init_midi(sender: mpsc::Sender<(u64, Vec<u8>)>) -> MidiConnections {
                 sender.clone(),
             )
             .ok();
-        connections.push(conn.unwrap());
+        if let Some(conn) = conn {
+            log::info!("Connecting to MIDI input {}", port_name);
+            connections.push(conn);
+        }
     }
 
     connections
