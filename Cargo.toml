@@ -14,8 +14,8 @@ interflow = { git = "https://github.com/SolarLiner/interflow", rev = "6825910c2b
 log = "0.4.28"
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
-midir = "0.10.3"
+midir = "0.11.0"
 
 # Ensure compatibility with legacy macOS versions.
 [target.'cfg(target_os = "macos")'.dependencies]
-midir = "0.9.1"
+midir = "0.11.0"
